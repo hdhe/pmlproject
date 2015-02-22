@@ -1,0 +1,117 @@
+---
+title: "Human Activity Prediction"
+author: "Hector"
+date: "Saturday, February 21, 2015"
+output: html_document
+---
+
+## Overview
+
+This work uses data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants in a human activity study. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).[1] 
+
+The goal is to predict the manner in which they did the exercise. This is the "classe" variable in the data set.
+
+## Exploring data
+
+```{r, echo=TRUE}
+# First we load the data from the working directory
+setwd("C:/Data")
+pmldata <- read.csv("C:/Data/pml-training.csv")
+project_test <- read.csv("C:/Data/pml-testing.csv")
+# We are going to build our predictive model using pmldata
+dim(pmldata)
+```
+
+The data for the prediction has 19.622 rows and 160 variables. We are going to predict the "classe". This variable is related with the following:
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).[1]
+
+## Cross validation
+
+To validate the model we create a training and testing set
+
+```{r, echo=TRUE, warning=FALSE}
+library(caret)
+inTrain <- createDataPartition(y=pmldata$classe, p=0.7, list=FALSE)
+training <- pmldata[inTrain,]
+testing <- pmldata[-inTrain,]
+# dimension of training and testing sets
+dim(training)
+dim(testing)
+
+```
+
+## Clean data
+It is neccesary to exclude some columns from the analysis
+
+```{r, echo=TRUE}
+# Exclude  all columns with some NA value
+training <- training[ , colSums(is.na(training)) == 0]
+# Exclude descriptive columns
+training <- training[, !names(training) %in% c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window")]
+# Exclude zero variance predictors
+training <- training[, -nearZeroVar(training, saveMetrics =FALSE)]
+dim(training)
+```
+The new training dimension is 53 columns
+
+
+## Prediction model
+
+We use the Random Forest method to train the model 
+
+```{r, echo=TRUE, warning=FALSE}
+library(randomForest)
+#modFit <- train(classe ~ ., data = training, method = "rf", prox = TRUE )
+modFit <- randomForest(classe ~ ., data = training, importance = TRUE, ntrees = 5)
+modFit
+```
+
+
+## Model validation
+
+Now we verify the accuracy of the prediction model using the testing partition
+
+```{r, echo=TRUE, warning=FALSE}
+confusionMatrix(testing$classe,predict(modFit,testing))
+```
+
+Our model was able obtained an accuracy of 99,35%
+
+## Project predictions
+
+We apply your machine learning algorithm to 20 test cases available in the test data above (project_test)
+
+```{r, echo=TRUE}
+# Predict 
+test_result <- predict(modFit, project_test)
+test_result
+# Export result to archives
+answers <- as.vector(test_result)
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+
+```
+
+
+
+## References
+
+[1] Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Max Kuhn. Contributions from Jed Wing, Steve Weston, Andre Williams, Chris Keefer,
+  Allan Engelhardt, Tony Cooper, Zachary Mayer, Brenton Kenkel, the R Core Team and
+  Michael Benesty. (2014). caret: Classification and Regression Training. R package
+  version 6.0-37. http://CRAN.R-project.org/package=caret
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3SRJvWfoW
+
+A. Liaw and M. Wiener (2002). Classification and Regression by randomForest. R  News
+  2(3), 18--22.
